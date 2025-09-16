@@ -22,7 +22,7 @@ const SalaryComponentsPage = () => {
     const [isLoading, setIsLoading] = useState(true);
     const [dialogOpen, setDialogOpen] = useState(false);
     const [selectedComponent, setSelectedComponent] = useState(null);
-    const { register, handleSubmit, reset, control } = useForm();
+    const { register, handleSubmit, reset, control, formState: { errors } } = useForm();
     const {user} = useAuth()
 
 const canViewPage = user?.is_master || user?.permissions.includes(PERMISSIONS.PAGES.SALARY_MANAGEMENT);
@@ -95,6 +95,13 @@ const canDelete = user?.is_master || user?.permissions.includes(PERMISSIONS.PAYR
             }
         }
     };
+    const handleReset = () => {
+        // Ensure we are in edit mode before resetting
+        if (selectedComponent) {
+            reset(selectedComponent); // Resets the form to the original component's data
+            toast.info("Form has been reset to its original values.");
+        }
+    };
 
     if (isLoading) {
         return <div className="flex items-center justify-center h-96"><Spinner /></div>;
@@ -161,10 +168,24 @@ const canDelete = user?.is_master || user?.permissions.includes(PERMISSIONS.PAYR
                         <DialogDescription>Define a new building block for employee salaries.</DialogDescription>
                     </DialogHeader>
                     <form onSubmit={handleSubmit(onSubmit)} className="space-y-4 py-4">
-                        <div>
-                            <Label htmlFor="name">Component Name</Label>
-                            <Input id="name" {...register("name", { required: true })} placeholder="e.g., House Rent Allowance" />
-                        </div>
+                         <div>
+        <Label htmlFor="name">Component Name</Label>
+        <Input 
+            id="name" 
+            {...register("name", { 
+                required: "Component name is required." // 1. Add a specific error message
+            })} 
+            placeholder="e.g., House Rent Allowance"
+            // 2. Conditionally add a red border class if there's an error
+            className={errors.name ? 'border-destructive' : ''}
+        />
+        {/* 3. Conditionally render the error message in red */}
+        {errors.name && (
+            <p className="text-sm text-destructive mt-1">
+                {errors.name.message}
+            </p>
+        )}
+    </div>
                         <div>
                             <Label>Component Type</Label>
                             <Controller
@@ -223,9 +244,17 @@ const canDelete = user?.is_master || user?.permissions.includes(PERMISSIONS.PAYR
                             <Label htmlFor="is_base_component">Is Base for Percentage Calculations? (e.g., Basic Salary)</Label>
                         </div>
                         <DialogFooter>
-                            <Button type="button" variant="secondary" onClick={() => setDialogOpen(false)}>Cancel</Button>
-                            <Button type="submit">Save Component</Button>
-                        </DialogFooter>
+    <Button type="button" variant="secondary" onClick={() => setDialogOpen(false)}>Cancel</Button>
+    
+    {/* This button will only appear when selectedComponent is not null (i.e., in edit mode) */}
+    {selectedComponent && (
+        <Button type="button" variant="outline" onClick={handleReset}>
+            Reset Changes
+        </Button>
+    )}
+    
+    <Button type="submit">Save Component</Button>
+</DialogFooter>
                     </form>
                 </DialogContent>
             </Dialog>}
