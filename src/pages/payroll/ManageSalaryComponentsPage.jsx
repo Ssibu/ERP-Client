@@ -33,19 +33,38 @@ const canUpdate = user?.is_master || (user?.permissions.includes(PERMISSIONS.PAG
 )
 const canCreate = user?.is_master || user?.permissions.includes(PERMISSIONS.PAYROLL.SALARY_COMPONENT.CREATE);
 const canDelete = user?.is_master || user?.permissions.includes(PERMISSIONS.PAYROLL.SALARY_COMPONENT.DELETE);
+const [sortConfig, setSortConfig] = useState({ key: 'name', direction: 'ASC' });
+
+// This function will be called when a header is clicked
+const requestSort = (key) => {
+    let direction = 'ASC';
+    // If clicking the same key, toggle the direction
+    if (sortConfig.key === key && sortConfig.direction === 'ASC') {
+        direction = 'DESC';
+    }
+    setSortConfig({ key, direction });
+};
+
+// This function adds a visual indicator to the sorted column header
+const getSortIndicator = (key) => {
+    if (sortConfig.key !== key) {
+        return null;
+    }
+    return sortConfig.direction === 'ASC' ? ' ▲' : ' ▼';
+}
 
     const fetchData = useCallback(async () => {
-
-
-        try {
-            const data = await getSalaryComponents();
-            setComponents(data);
-        } catch (error) {
-            toast.error("Failed to load salary components", { description: error.message });
-        } finally {
-            setIsLoading(false);
-        }
-    }, []);
+    try {
+        // Pass the sort config to the service function
+        const params = { sort: sortConfig.key, order: sortConfig.direction };
+        const data = await getSalaryComponents(params);
+        setComponents(data);
+    } catch (error) {
+        toast.error("Failed to load salary components", { description: error.message });
+    } finally {
+        setIsLoading(false);
+    }
+}, [sortConfig]);
 
     useEffect(() => {
         fetchData();
@@ -140,16 +159,46 @@ const canDelete = user?.is_master || user?.permissions.includes(PERMISSIONS.PAYR
                 <CardContent>
                     <Table>
                         <TableHeader>
-                            <TableRow>
-                                <TableHead>SL NO </TableHead>
-                                <TableHead>Component ID</TableHead>
-                                <TableHead>Component Name</TableHead>
-                                <TableHead>Type</TableHead>
-                                <TableHead>Days</TableHead>
-                                <TableHead>Base</TableHead>
-                                <TableHead>Actions</TableHead>
-                            </TableRow>
-                        </TableHeader>
+    <TableRow>
+        <TableHead>SL NO</TableHead>
+        <TableHead
+            className="cursor-pointer hover:bg-muted"
+            onClick={() => requestSort('id')}
+        >
+            Component ID{getSortIndicator('id')}
+        </TableHead>
+        
+        <TableHead 
+            className="cursor-pointer hover:bg-muted"
+            onClick={() => requestSort('name')}
+        >
+            Component Name{getSortIndicator('name')}
+        </TableHead>
+
+        <TableHead 
+            className="cursor-pointer hover:bg-muted"
+            onClick={() => requestSort('type')}
+        >
+            Type{getSortIndicator('type')}
+        </TableHead>
+
+        <TableHead 
+            className="cursor-pointer hover:bg-muted"
+            onClick={() => requestSort('is_days_based')}
+        >
+            Days Based{getSortIndicator('is_days_based')}
+        </TableHead>
+
+        <TableHead 
+            className="cursor-pointer hover:bg-muted"
+            onClick={() => requestSort('is_base_component')}
+        >
+            Base{getSortIndicator('is_base_component')}
+        </TableHead>
+
+        <TableHead>Actions</TableHead>
+    </TableRow>
+</TableHeader>
                         <TableBody>
                             {components.map((comp, i) => (
                                 <TableRow key={comp.id}>

@@ -1,8 +1,8 @@
 import apiClient from '@/api/axiosConfig';
 
 
-export const getSalaryComponents = async () => {
-    const { data } = await apiClient.get('/salary/components');
+export const getSalaryComponents = async (params = {}) => {
+    const { data } = await apiClient.get('/salary/components', { params });
     return data;
 };
 
