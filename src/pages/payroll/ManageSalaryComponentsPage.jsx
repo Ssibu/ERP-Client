@@ -80,8 +80,19 @@ const canDelete = user?.is_master || user?.permissions.includes(PERMISSIONS.PAYR
             fetchData();
             setDialogOpen(false);
         } catch (error) {
-            toast.error("Operation failed", { description: error.message });
+        // This is the new, smarter error handling block
+        if (error.response && error.response.data && error.response.data.message) {
+            // If the server sends a specific message in the response body, display it
+            toast.error("Creation Failed", {
+                description: error.response.data.message,
+            });
+        } else {
+            // Otherwise, fall back to a generic error message
+            toast.error("Operation Failed", {
+                description: "An unexpected error occurred. Please try again.",
+            });
         }
+    }
     };
 
     const handleDelete = async (id) => {
