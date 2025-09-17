@@ -5,7 +5,10 @@ export const getSalaryComponents = async (params = {}) => {
     const { data } = await apiClient.get('/salary/components', { params });
     return data;
 };
-
+export const getSalaryComponentById = async (id) => {
+    const { data } = await apiClient.get(`/salary/components/${id}`);
+    return data;
+};
 export const createSalaryComponent = async (componentData) => {
     const { data } = await apiClient.post('/salary/components', componentData);
     return data;

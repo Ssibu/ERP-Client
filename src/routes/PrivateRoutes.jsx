@@ -22,6 +22,7 @@ import SignOutPage from "@/pages/auth/SignOutPage";
 import PayrollPage from "@/pages/payroll/PayrollPage";
 import SalaryStructurePage from "@/pages/payroll/SalaryStructurePage";
 import SalaryComponentsPage from "@/pages/payroll/ManageSalaryComponentsPage";
+import SalaryComponentFormPage from "@/pages/payroll/SalaryComponentFormPage";
 
 
 const ProtectedPage = ({ children, permission }) => (
@@ -177,13 +178,29 @@ const PrivateRoutes = () => {
         }
     />
   <Route 
-        path="/manage-salary-components"
-        element={
-            <ProtectedPage /* permission={PERMISSIONS.PAGES.SALARY_MANAGEMENT} */>
-                <SalaryComponentsPage />
-            </ProtectedPage>
-        }
-    />
+    path="/manage-salary-components" // Renamed path for the list page
+    element={
+        <ProtectedPage permission={PERMISSIONS.PAGES.SALARY_MANAGEMENT}>
+            <SalaryComponentsPage />
+        </ProtectedPage>
+    }
+/>
+<Route 
+    path="/salary-components/add" // Route for the "add" form
+    element={
+        <ProtectedPage permission={PERMISSIONS.PAGES.SALARY_MANAGEMENT}>
+            <SalaryComponentFormPage />
+        </ProtectedPage>
+    }
+/>
+<Route 
+    path="/salary-components/edit/:id" // Route for the "edit" form
+    element={
+        <ProtectedPage permission={PERMISSIONS.PAGES.SALARY_MANAGEMENT}>
+            <SalaryComponentFormPage />
+        </ProtectedPage>
+    }
+/>
 
       </Routes>
   );

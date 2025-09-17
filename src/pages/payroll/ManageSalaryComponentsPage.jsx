@@ -1,329 +1,179 @@
-import React, { useState, useEffect, useCallback } from 'react';
-import { useForm, Controller } from 'react-hook-form';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
-import {
-    Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
-} from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Checkbox } from "@/components/ui/checkbox";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Spinner } from '@/components/ui/spinner';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
-import { getSalaryComponents, createSalaryComponent, updateSalaryComponent, deleteSalaryComponent } from '@/services/salary-service';
-import { PERMISSIONS } from '@/config/permissions'; 
+import { Input } from "@/components/ui/input";
+import { getSalaryComponents, deleteSalaryComponent } from '@/services/salary-service';
+import { PERMISSIONS } from '@/config/permissions';
 import useAuth from "@/hooks/useAuth";
-import AcessDenied from "@/components/AccessDenied";
+import AccessDenied from "@/components/AccessDenied";
+import { DataTable } from "@/components/DataTable";
+import { useDebounce } from "@/hooks/useDebounce";
+import { Search, Plus, Terminal } from 'lucide-react';
+import { Spinner } from '@/components/ui/spinner';
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 
 const SalaryComponentsPage = () => {
-    const [components, setComponents] = useState([]);
-    const [isLoading, setIsLoading] = useState(true);
-    const [dialogOpen, setDialogOpen] = useState(false);
-    const [selectedComponent, setSelectedComponent] = useState(null);
-    const { register, handleSubmit, reset, control, formState: { errors } } = useForm();
-    const {user} = useAuth()
+    const navigate = useNavigate();
 
-const canViewPage = user?.is_master || user?.permissions.includes(PERMISSIONS.PAGES.SALARY_MANAGEMENT);
-const canRead = user?.is_master || (user?.permissions.includes(PERMISSIONS.PAGES.SALARY_MANAGEMENT) && user?.permissions.includes(PERMISSIONS.PAYROLL.SALARY_COMPONENT.READ)
-)
-const canUpdate = user?.is_master || (user?.permissions.includes(PERMISSIONS.PAGES.SALARY_MANAGEMENT) && user?.permissions.includes(PERMISSIONS.PAYROLL.SALARY_COMPONENT.READ)
-&& user?.permissions.includes(PERMISSIONS.PAYROLL.SALARY_COMPONENT.UPDATE)
-)
-const canCreate = user?.is_master || user?.permissions.includes(PERMISSIONS.PAYROLL.SALARY_COMPONENT.CREATE);
-const canDelete = user?.is_master || user?.permissions.includes(PERMISSIONS.PAYROLL.SALARY_COMPONENT.DELETE);
-const [sortConfig, setSortConfig] = useState({ key: 'name', direction: 'ASC' });
+    // --- STATE MANAGEMENT for Server-Side DataTable ---
+    const [data, setData] = useState([]);
+    const [pageCount, setPageCount] = useState(0);
+    const [loading, setLoading] = useState(false);
+    const [error, setError] = useState("");
+    const [searchTerm, setSearchTerm] = useState("");
+    const debouncedSearchTerm = useDebounce(searchTerm, 500);
 
-// This function will be called when a header is clicked
-const requestSort = (key) => {
-    let direction = 'ASC';
-    // If clicking the same key, toggle the direction
-    if (sortConfig.key === key && sortConfig.direction === 'ASC') {
-        direction = 'DESC';
-    }
-    setSortConfig({ key, direction });
-};
+    const [pagination, setPagination] = useState({ pageIndex: 0, pageSize: 10 });
+    const [sorting, setSorting] = useState([{ id: 'name', desc: false }]);
+    const [refetchTrigger, setRefetchTrigger] = useState(0);
 
-// This function adds a visual indicator to the sorted column header
-const getSortIndicator = (key) => {
-    if (sortConfig.key !== key) {
-        return null;
-    }
-    return sortConfig.direction === 'ASC' ? ' ▲' : ' ▼';
-}
+    const { user } = useAuth();
 
+    // --- PERMISSIONS ---
+    const canViewPage = user?.is_master || user?.permissions.includes(PERMISSIONS.PAGES.SALARY_MANAGEMENT);
+    const canRead = user?.is_master || user?.permissions.includes(PERMISSIONS.PAYROLL.SALARY_COMPONENT.READ);
+    const canUpdate = user?.is_master || user?.permissions.includes(PERmissions.PAYROLL.SALARY_COMPONENT.UPDATE);
+    const canCreate = user?.is_master || user?.permissions.includes(PERMISSIONS.PAYROLL.SALARY_COMPONENT.CREATE);
+    const canDelete = user?.is_master || user?.permissions.includes(PERMISSIONS.PAYROLL.SALARY_COMPONENT.DELETE);
+
+    // --- DATA FETCHING ---
     const fetchData = useCallback(async () => {
-    try {
-        // Pass the sort config to the service function
-        const params = { sort: sortConfig.key, order: sortConfig.direction };
-        const data = await getSalaryComponents(params);
-        setComponents(data);
-    } catch (error) {
-        toast.error("Failed to load salary components", { description: error.message });
-    } finally {
-        setIsLoading(false);
-    }
-}, [sortConfig]);
+        if (!canRead) return;
+        setLoading(true);
+        try {
+            const sortParams = sorting[0] ?? { id: 'name', desc: false };
+            const params = {
+                page: pagination.pageIndex + 1,
+                pageSize: pagination.pageSize,
+                sortBy: sortParams.id,
+                sortOrder: sortParams.desc ? 'DESC' : 'ASC',
+            };
+            if (debouncedSearchTerm) params.search = debouncedSearchTerm;
+
+            const response = await getSalaryComponents(params);
+            setData(response.data);
+            setPageCount(response.totalPages);
+            setError("");
+        } catch (err) {
+            setError(err.response?.data?.message || "Failed to fetch salary components.");
+        } finally {
+            setLoading(false);
+        }
+    }, [pagination, sorting, debouncedSearchTerm, canRead, refetchTrigger]);
 
     useEffect(() => {
         fetchData();
     }, [fetchData]);
 
-    const openDialog = (component = null) => {
-        setSelectedComponent(component);
-        if (component) {
-            reset(component);
-        } else {
-            reset({
-                name: '',
-                type: 'Earning',
-                is_days_based: true,
-                is_base_component: false
-            });
-        }
-        setDialogOpen(true);
-    };
-
-    const onSubmit = async (data) => {
-        data.is_base_component = !!data.is_base_component;
-
-        try {
-            if (selectedComponent) {
-                await updateSalaryComponent(selectedComponent.id, data);
-                toast.success("Component updated successfully.");
-            } else {
-                await createSalaryComponent(data);
-                toast.success("Component created successfully.");
-            }
-            fetchData();
-            setDialogOpen(false);
-        } catch (error) {
-        // This is the new, smarter error handling block
-        if (error.response && error.response.data && error.response.data.message) {
-            // If the server sends a specific message in the response body, display it
-            toast.error("Creation Failed", {
-                description: error.response.data.message,
-            });
-        } else {
-            // Otherwise, fall back to a generic error message
-            toast.error("Operation Failed", {
-                description: "An unexpected error occurred. Please try again.",
-            });
-        }
-    }
-    };
-
-    const handleDelete = async (id) => {
-        if (window.confirm('Are you sure you want to delete this component? This may affect existing employee salary structures.')) {
+    // --- DELETE HANDLER ---
+    const handleDelete = async (component) => {
+        if (window.confirm(`Are you sure you want to delete "${component.name}"? This may affect existing employee salary structures.`)) {
             try {
-                await deleteSalaryComponent(id);
+                await deleteSalaryComponent(component.id);
                 toast.success("Component deleted successfully.");
-                fetchData();
+                setRefetchTrigger(c => c + 1); // Trigger a data refetch
             } catch (error) {
                 toast.error("Deletion failed", { description: error.message });
             }
         }
     };
-    const handleReset = () => {
-        // Ensure we are in edit mode before resetting
-        if (selectedComponent) {
-            reset(selectedComponent); // Resets the form to the original component's data
-            toast.info("Form has been reset to its original values.");
-        }
-    };
 
-    if (isLoading) {
-        return <div className="flex items-center justify-center h-96"><Spinner /></div>;
-    }
+    // --- COLUMN DEFINITIONS for DataTable ---
+    const columns = useMemo(() => [
+        {
+            header: 'ID',
+            accessorKey: 'id',
+        },
+        {
+            header: 'Component Name',
+            accessorKey: 'name',
+        },
+        {
+            header: 'Type',
+            accessorKey: 'type',
+        },
+        {
+            header: 'Days Based',
+            accessorKey: 'is_days_based',
+            cell: ({ row }) => (row.original.is_days_based ? 'Yes' : 'No'),
+        },
+        {
+            header: 'Base',
+            accessorKey: 'is_base_component',
+            cell: ({ row }) => (row.original.is_base_component ? 'Yes' : 'No'),
+        },
+        {
+            id: 'actions',
+            header: 'Actions',
+            cell: ({ row }) => (
+                <div className="flex justify-center space-x-2">
+                    {canUpdate && (
+                        <Button variant="outline" size="sm" onClick={() => navigate(`/salary-components/edit/${row.original.id}`)}>
+                            Edit
+                        </Button>
+                    )}
+                    {canDelete && (
+                        <Button variant="destructive" size="sm" onClick={() => handleDelete(row.original)}>
+                            Delete
+                        </Button>
+                    )}
+                </div>
+            ),
+        },
+    ], [canUpdate, canDelete, navigate]); // Added navigate as a dependency
 
-    if(!canViewPage) return <AcessDenied/>
+    if (!canViewPage) return <AccessDenied />;
 
+    // --- RENDER JSX ---
     return (
-    <>
-
-    
-
-    <div className="p-4 lg:p-6">
+        <div className="p-4 lg:p-6">
             <header className="mb-6 flex justify-between items-center">
                 <div>
                     <h1 className="text-2xl font-bold tracking-tight">Salary Components</h1>
                     <p className="text-muted-foreground">Manage the master list of salary components.</p>
                 </div>
-                {canCreate && <Button onClick={() => openDialog()}>Add New Component</Button>}
+                {canCreate && (
+                    <Button onClick={() => navigate('/salary-components/add')}>
+                        <Plus className="mr-2 h-4 w-4" /> Add New Component
+                    </Button>
+                )}
             </header>
 
-              {canRead ? (
-
             <Card>
+                <CardHeader>
+                    <CardTitle>All Components</CardTitle>
+                    <div className="relative mt-2">
+                        <Search className="absolute left-2.5 top-2.5 h-7 w-4 text-muted-foreground" />
+                        <Input
+                            type="search"
+                            placeholder="Search by Name or Type..."
+                            className="w-full pl-8 sm:w-1/3"
+                            value={searchTerm}
+                            onChange={(e) => setSearchTerm(e.target.value)}
+                        />
+                    </div>
+                </CardHeader>
                 <CardContent>
-                    <Table>
-                        <TableHeader>
-    <TableRow>
-        <TableHead>SL NO</TableHead>
-        <TableHead
-            className="cursor-pointer hover:bg-muted"
-            onClick={() => requestSort('id')}
-        >
-            Component ID{getSortIndicator('id')}
-        </TableHead>
-        
-        <TableHead 
-            className="cursor-pointer hover:bg-muted"
-            onClick={() => requestSort('name')}
-        >
-            Component Name{getSortIndicator('name')}
-        </TableHead>
-
-        <TableHead 
-            className="cursor-pointer hover:bg-muted"
-            onClick={() => requestSort('type')}
-        >
-            Type{getSortIndicator('type')}
-        </TableHead>
-
-        <TableHead 
-            className="cursor-pointer hover:bg-muted"
-            onClick={() => requestSort('is_days_based')}
-        >
-            Days Based{getSortIndicator('is_days_based')}
-        </TableHead>
-
-        <TableHead 
-            className="cursor-pointer hover:bg-muted"
-            onClick={() => requestSort('is_base_component')}
-        >
-            Base{getSortIndicator('is_base_component')}
-        </TableHead>
-
-        <TableHead>Actions</TableHead>
-    </TableRow>
-</TableHeader>
-                        <TableBody>
-                            {components.map((comp, i) => (
-                                <TableRow key={comp.id}>
-                                     <TableCell>{i + 1}</TableCell>
-                                     <TableCell>{comp.id}</TableCell>
-                                    <TableCell className="font-medium">{comp.name}</TableCell>
-                                    <TableCell>{comp.type}</TableCell>
-                                     <TableCell>{comp.is_days_based ? 'Yes' : 'No'}</TableCell>
-                                    <TableCell>{comp.is_base_component ? 'Yes' : 'No'}</TableCell>
-                                    {(canUpdate || canDelete) ? (<TableCell className="text-right space-x-2">
-                                        {canUpdate && <Button variant="outline" size="sm" onClick={() => openDialog(comp)}>Edit</Button>
-}
-                                  {canDelete &&   <Button variant="destructive" size="sm" onClick={() => handleDelete(comp.id)}>Delete</Button>}
-                                    </TableCell>) : "N/A" }
-                                </TableRow>
-                            ))}
-                        </TableBody>
-                    </Table>
+                    {loading ? (
+                        <div className="flex justify-center items-center h-64"><Spinner /></div>
+                    ) : error ? (
+                        <Alert variant="destructive"><Terminal className="h-4 w-4" /><AlertTitle>Error</AlertTitle><AlertDescription>{error}</AlertDescription></Alert>
+                    ) : (
+                        <DataTable
+                            columns={columns}
+                            data={data}
+                            pageCount={pageCount}
+                            pagination={pagination}
+                            setPagination={setPagination}
+                            sorting={sorting}
+                            setSorting={setSorting}
+                        />
+                    )}
                 </CardContent>
             </Card>
-            )  : <AcessDenied/> }
-{(canCreate || canUpdate) && 
-            <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-                <DialogContent>
-                    <DialogHeader>
-                        <DialogTitle>{selectedComponent ? 'Edit' : 'Create'} Salary Component</DialogTitle>
-                        <DialogDescription>Define a new building block for employee salaries.</DialogDescription>
-                    </DialogHeader>
-                    <form onSubmit={handleSubmit(onSubmit)} className="space-y-4 py-4">
-                         <div>
-        <Label htmlFor="name">Component Name</Label>
-        <Input 
-            id="name" 
-            {...register("name", { 
-                required: "Component name is required." // 1. Add a specific error message
-            })} 
-            placeholder="e.g., House Rent Allowance"
-            // 2. Conditionally add a red border class if there's an error
-            className={errors.name ? 'border-destructive' : ''}
-        />
-        {/* 3. Conditionally render the error message in red */}
-        {errors.name && (
-            <p className="text-sm text-destructive mt-1">
-                {errors.name.message}
-            </p>
-        )}
-    </div>
-                        <div>
-                            <Label>Component Type</Label>
-                            <Controller
-                                name="type"
-                                control={control}
-                                render={({ field }) => (
-                                    <Select onValueChange={field.onChange} value={field.value}>
-                                        <SelectTrigger><SelectValue /></SelectTrigger>
-                                        <SelectContent>
-                                            <SelectItem value="Earning">Earning</SelectItem>
-                                            <SelectItem value="Deduction">Deduction</SelectItem>
-                                        </SelectContent>
-                                    </Select>
-                                )}
-                            />
-                        </div>
-
-                          <div>
-                            <Label>Days based</Label>
-
-                            <Controller
-    name="is_days_based"
-    control={control}
-    render={({ field }) => (
-        <Select
-            onValueChange={(val) => field.onChange(val === "true")}
-            value={String(field.value)} 
-        >
-            <SelectTrigger>
-                <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-                <SelectItem value="true">Yes</SelectItem>
-                <SelectItem value="false">No</SelectItem>
-            </SelectContent>
-        </Select>
-    )}
-/>
-
-                        </div>
-
-
-
-                        <div className="flex items-center space-x-2">
-                            <Controller
-                                name="is_base_component"
-                                control={control}
-                                render={({ field }) => (
-                                    <Checkbox
-                                        id="is_base_component"
-                                        checked={field.value}
-                                        onCheckedChange={field.onChange}
-                                    />
-                                )}
-                            />
-                            <Label htmlFor="is_base_component">Is Base for Percentage Calculations? (e.g., Basic Salary)</Label>
-                        </div>
-                        <DialogFooter>
-    <Button type="button" variant="secondary" onClick={() => setDialogOpen(false)}>Cancel</Button>
-    
-    {/* This button will only appear when selectedComponent is not null (i.e., in edit mode) */}
-    {selectedComponent && (
-        <Button type="button" variant="outline" onClick={handleReset}>
-            Reset Changes
-        </Button>
-    )}
-    
-    <Button type="submit">Save Component</Button>
-</DialogFooter>
-                    </form>
-                </DialogContent>
-            </Dialog>}
-
         </div>
- 
-
-</>
-
     );
 };
 

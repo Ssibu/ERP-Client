@@ -124,7 +124,7 @@ const SalaryComponentFormPage = () => {
                         </div>
                     </CardContent>
                     <CardFooter className="border-t px-6 py-4 flex justify-between">
-                        <Button type="button" variant="outline" onClick={() => navigate('/salary-components')} disabled={isSubmitting}>
+                        <Button type="button" variant="outline" onClick={() => navigate('/manage-salary-components')} disabled={isSubmitting}>
                             <X className="mr-2 h-4 w-4" /> Cancel
                         </Button>
                         <Button type="submit" disabled={isSubmitting}>
